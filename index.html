@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="My Music">
+  <title>My Music Player</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --accent: #fa2d48; /* Apple Music風のピンクレッド */
+      --text-main: #ffffff;
+      --text-sub: #a0a0a0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding: 20px;
+      padding-top: env(safe-area-inset-top, 20px);
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+    /* アートワーク表示 */
+    .artwork {
+      width: 240px;
+      height: 240px;
+      margin: 20px auto;
+      background: linear-gradient(135deg, #fa2d48, #ff6b81);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 80px;
+      box-shadow: 0 12px 30px rgba(250, 45, 72, 0.3);
+    }
+    /* 曲情報 */
+    .track-info { text-align: center; margin-bottom: 20px; }
+    .track-title { font-size: 20px; font-weight: bold; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-status { font-size: 13px; color: var(--text-sub); }
+    /* シークバー */
+    .progress-container { margin-bottom: 20px; }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      height: 5px;
+      border-radius: 5px;
+    }
+    .time-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); margin-top: 6px; }
+    /* コントロールボタン */
+    .controls { display: flex; justify-content: center; align-items: center; gap: 36px; margin-bottom: 24px; }
+    .btn { background: none; border: none; color: var(--text-main); font-size: 28px; cursor: pointer; }
+    .btn-play {
+      background-color: var(--accent);
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* ファイル選択ボタン */
+    .file-label {
+      display: block;
+      text-align: center;
+      background-color: var(--card-bg);
+      color: var(--accent);
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      cursor: pointer;
+    }
+    input[type="file"] { display: none; }
+    /* プレイリスト */
+    .playlist { flex: 1; overflow-y: auto; background-color: var(--card-bg); border-radius: 12px; padding: 10px; }
+    .playlist-item {
+      padding: 12px;
+      border-bottom: 1px solid #2c2c2c;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .playlist-item.active { color: var(--accent); font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div class="artwork">🎵</div>
+
+  <div class="track-info">
+    <div class="track-title" id="trackTitle">曲を選択してください</div>
+    <div class="track-status" id="trackStatus">ファイルから音楽を追加</div>
+  </div>
+
+  <div class="progress-container">
+    <input type="range" id="seekBar" value="0" min="0" max="100">
+    <div class="time-info">
+      <span id="currentTime">0:00</span>
+      <span id="duration">0:00</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="prevBtn">⏮</button>
+    <button class="btn btn-play" id="playBtn">▶</button>
+    <button class="btn" id="nextBtn">⏭</button>
+  </div>
+
+  <label class="file-label">
+    ＋ iPhoneから音楽ファイルを選ぶ（複数可）
+    <input type="file" id="fileInput" accept="audio/*" multiple>
+  </label>
+
+  <div class="playlist" id="playlist"></div>
+
+  <audio id="audio"></audio>
+
+  <script>
+    const audio = document.getElementById('audio');
+    const fileInput = document.getElementById('fileInput');
+    const playBtn = document.getElementById('playBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const seekBar = document.getElementById('seekBar');
+    const trackTitle = document.getElementById('trackTitle');
+    const trackStatus = document.getElementById('trackStatus');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationEl = document.getElementById('duration');
+    const playlistEl = document.getElementById('playlist');
+
+    let tracks = [];
+    let currentIndex = 0;
+
+    // 複数ファイルの読み込み
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      tracks = files.map(file => ({
+        name: file.name.replace(/\.[^/.]+$/, ""), // 拡張子を消して曲名にする
+        url: URL.createObjectURL(file)
+      }));
+
+      renderPlaylist();
+      loadTrack(0);
+      playTrack();
+    });
+
+    // プレイリスト描画
+    function renderPlaylist() {
+      playlistEl.innerHTML = '';
+      tracks.forEach((track, index) => {
+        const div = document.createElement('div');
+        div.className = 'playlist-item' + (index === currentIndex ? ' active' : '');
+        div.textContent = `${index + 1}. ${track.name}`;
+        div.onclick = () => {
+          loadTrack(index);
+          playTrack();
+        };
+        playlistEl.appendChild(div);
+      });
+    }
+
+    // 曲のセット
+    function loadTrack(index) {
+      currentIndex = index;
+      audio.src = tracks[index].url;
+      trackTitle.textContent = tracks[index].name;
+      trackStatus.textContent = `${index + 1} / ${tracks.length} 曲目`;
+      renderPlaylist();
+      updateMediaSession();
+    }
+
+    function playTrack() {
+      audio.play();
+      playBtn.textContent = '⏸';
+    }
+
+    function pauseTrack() {
+      audio.pause();
+      playBtn.textContent = '▶';
+    }
+
+    playBtn.onclick = () => {
+      if (tracks.length === 0) return;
+      audio.paused ? playTrack() : pauseTrack();
+    };
+
+    prevBtn.onclick = () => {
+      if (tracks.length === 0) return;
+      currentIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+      loadTrack(currentIndex);
+      playTrack();
+    };
+
+    nextBtn.onclick = () => {
+      if (tracks.length === 0) return;
+      currentIndex = (currentIndex + 1) % tracks.length;
+      loadTrack(currentIndex);
+      playTrack();
+    };
+
+    // 曲終了時に自動で次へ
+    audio.onended = () => nextBtn.onclick();
+
+    // シークバー更新
+    audio.ontimeupdate = () => {
+      if (!audio.duration) return;
+      seekBar.value = (audio.currentTime / audio.duration) * 100;
+      currentTimeEl.textContent = formatTime(audio.currentTime);
+      durationEl.textContent = formatTime(audio.duration);
+    };
+
+    seekBar.oninput = () => {
+      if (!audio.duration) return;
+      audio.currentTime = (seekBar.value / 100) * audio.duration;
+    };
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    // iPhoneロック画面のコントロール連携
+    function updateMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: tracks[currentIndex].name,
+          artist: 'My Music Player'
+        });
+        navigator.mediaSession.setActionHandler('play', playTrack);
+        navigator.mediaSession.setActionHandler('pause', pauseTrack);
+        navigator.mediaSession.setActionHandler('previoustrack', () => prevBtn.onclick());
+        navigator.mediaSession.setActionHandler('nexttrack', () => nextBtn.onclick());
+      }
+    }
+  </script>
+</body>
+</html>
