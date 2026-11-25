@@ -11,7 +11,7 @@
     :root {
       --bg-color: #121212;
       --card-bg: #1e1e1e;
-      --accent: #fa2d48; /* Apple Music風のピンクレッド */
+      --accent: #fa2d48;
       --text-main: #ffffff;
       --text-sub: #a0a0a0;
     }
@@ -26,33 +26,26 @@
       padding-top: env(safe-area-inset-top, 20px);
       padding-bottom: env(safe-area-inset-bottom, 20px);
     }
-    /* アートワーク表示 */
     .artwork {
       width: 240px;
       height: 240px;
       margin: 20px auto;
       background: linear-gradient(135deg, #fa2d48, #ff6b81);
       border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 80px;
       box-shadow: 0 12px 30px rgba(250, 45, 72, 0.3);
+      overflow: hidden;
     }
-    /* 曲情報 */
+    .artwork img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
     .track-info { text-align: center; margin-bottom: 20px; }
     .track-title { font-size: 20px; font-weight: bold; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .track-status { font-size: 13px; color: var(--text-sub); }
-    /* シークバー */
     .progress-container { margin-bottom: 20px; }
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-      height: 5px;
-      border-radius: 5px;
-    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); height: 5px; border-radius: 5px; }
     .time-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); margin-top: 6px; }
-    /* コントロールボタン */
     .controls { display: flex; justify-content: center; align-items: center; gap: 36px; margin-bottom: 24px; }
     .btn { background: none; border: none; color: var(--text-main); font-size: 28px; cursor: pointer; }
     .btn-play {
@@ -65,20 +58,6 @@
       align-items: center;
       justify-content: center;
     }
-    /* ファイル選択ボタン */
-    .file-label {
-      display: block;
-      text-align: center;
-      background-color: var(--card-bg);
-      color: var(--accent);
-      padding: 12px;
-      border-radius: 10px;
-      font-weight: bold;
-      margin-bottom: 16px;
-      cursor: pointer;
-    }
-    input[type="file"] { display: none; }
-    /* プレイリスト */
     .playlist { flex: 1; overflow-y: auto; background-color: var(--card-bg); border-radius: 12px; padding: 10px; }
     .playlist-item {
       padding: 12px;
@@ -94,11 +73,14 @@
 </head>
 <body>
 
-  <div class="artwork">🎵</div>
+  <div class="artwork">
+    <!-- ▼ GitHubにアップした画像ファイル名に書き換える -->
+    <img id="artworkImg" src="cover.jpg" alt="ジャケット画像">
+  </div>
 
   <div class="track-info">
-    <div class="track-title" id="trackTitle">曲を選択してください</div>
-    <div class="track-status" id="trackStatus">ファイルから音楽を追加</div>
+    <div class="track-title" id="trackTitle">読み込み中...</div>
+    <div class="track-status" id="trackStatus">My Playlist</div>
   </div>
 
   <div class="progress-container">
@@ -115,18 +97,19 @@
     <button class="btn" id="nextBtn">⏭</button>
   </div>
 
-  <label class="file-label">
-    ＋ iPhoneから音楽ファイルを選ぶ（複数可）
-    <input type="file" id="fileInput" accept="audio/*" multiple>
-  </label>
-
   <div class="playlist" id="playlist"></div>
 
   <audio id="audio"></audio>
 
   <script>
+    // ▼ ここにGitHubにアップした音楽ファイル名と、表示したい曲名を書く（増やすことも可能）
+    const tracks = [
+      { name: "innmukinng", url: "song1.wav" },
+      { name: "2曲目のタイトル", url: "song2.mp3" },
+      { name: "3曲目のタイトル", url: "song3.mp3" }
+    ];
+
     const audio = document.getElementById('audio');
-    const fileInput = document.getElementById('fileInput');
     const playBtn = document.getElementById('playBtn');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
@@ -137,25 +120,8 @@
     const durationEl = document.getElementById('duration');
     const playlistEl = document.getElementById('playlist');
 
-    let tracks = [];
     let currentIndex = 0;
 
-    // 複数ファイルの読み込み
-    fileInput.addEventListener('change', (e) => {
-      const files = Array.from(e.target.files);
-      if (files.length === 0) return;
-
-      tracks = files.map(file => ({
-        name: file.name.replace(/\.[^/.]+$/, ""), // 拡張子を消して曲名にする
-        url: URL.createObjectURL(file)
-      }));
-
-      renderPlaylist();
-      loadTrack(0);
-      playTrack();
-    });
-
-    // プレイリスト描画
     function renderPlaylist() {
       playlistEl.innerHTML = '';
       tracks.forEach((track, index) => {
@@ -170,7 +136,6 @@
       });
     }
 
-    // 曲のセット
     function loadTrack(index) {
       currentIndex = index;
       audio.src = tracks[index].url;
@@ -191,28 +156,23 @@
     }
 
     playBtn.onclick = () => {
-      if (tracks.length === 0) return;
       audio.paused ? playTrack() : pauseTrack();
     };
 
     prevBtn.onclick = () => {
-      if (tracks.length === 0) return;
       currentIndex = (currentIndex - 1 + tracks.length) % tracks.length;
       loadTrack(currentIndex);
       playTrack();
     };
 
     nextBtn.onclick = () => {
-      if (tracks.length === 0) return;
       currentIndex = (currentIndex + 1) % tracks.length;
       loadTrack(currentIndex);
       playTrack();
     };
 
-    // 曲終了時に自動で次へ
     audio.onended = () => nextBtn.onclick();
 
-    // シークバー更新
     audio.ontimeupdate = () => {
       if (!audio.duration) return;
       seekBar.value = (audio.currentTime / audio.duration) * 100;
@@ -231,12 +191,12 @@
       return `${m}:${s}`;
     }
 
-    // iPhoneロック画面のコントロール連携
     function updateMediaSession() {
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: tracks[currentIndex].name,
-          artist: 'My Music Player'
+          artist: 'My Music Player',
+          artwork: [{ src: 'cover.jpg' }] // ← 画像ファイル名と合わせる
         });
         navigator.mediaSession.setActionHandler('play', playTrack);
         navigator.mediaSession.setActionHandler('pause', pauseTrack);
@@ -244,6 +204,9 @@
         navigator.mediaSession.setActionHandler('nexttrack', () => nextBtn.onclick());
       }
     }
+
+    // 起動時に1曲目を自動セット
+    loadTrack(0);
   </script>
 </body>
 </html>
